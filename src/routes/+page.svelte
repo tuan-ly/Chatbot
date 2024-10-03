@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import { onMount } from 'svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { browser } from '$app/environment';
 	import { AI_URL, models } from '$lib/config';
+	import SvelteMarkdown from 'svelte-markdown';
 
 	interface Message {
 		role: string;
@@ -116,14 +118,14 @@
 							message.role === 'user' ? 'bg-blue-100 ml-auto' : 'bg-gray-100'
 						}`}
 					>
-						{message.content}
+						<SvelteMarkdown source={message.content} />
 					</div>
 				{/each}
 			{/if}
 		</div>
 		<div class="p-4 bg-white border-t">
 			<div class="flex space-x-2">
-				<Input bind:value={userInput} placeholder="Type your message..." class="flex-1" />
+				<Textarea bind:value={userInput} placeholder="Type your message..." class="flex-1" />
 				<Button on:click={sendMessage} disabled={!canSendMessage}>Send</Button>
 			</div>
 			<div class="mt-2">
@@ -136,3 +138,34 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	:global(.svelte-markdown code) {
+		background-color: #f0f0f0;
+		padding: 2px 4px;
+		border-radius: 4px;
+	}
+
+	:global(.svelte-markdown pre) {
+		background-color: #f0f0f0;
+		padding: 1em;
+		border-radius: 4px;
+		overflow-x: auto;
+	}
+
+	:global(.svelte-markdown blockquote) {
+		border-left: 4px solid #ccc;
+		margin: 0;
+		padding-left: 1em;
+	}
+
+	:global(.svelte-markdown table) {
+		border-collapse: collapse;
+		margin: 1em 0;
+	}
+
+	:global(.svelte-markdown th, .svelte-markdown td) {
+		border: 1px solid #ccc;
+		padding: 0.5em;
+	}
+</style>

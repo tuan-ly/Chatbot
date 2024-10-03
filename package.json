@@ -38,6 +38,7 @@
 		"clsx": "^2.1.1",
 		"dotenv": "^16.4.5",
 		"shadcn-svelte": "^0.13.0",
+		"svelte-markdown": "^0.4.1",
 		"tailwind-merge": "^2.5.2",
 		"tailwind-variants": "^0.2.1"
 	}
