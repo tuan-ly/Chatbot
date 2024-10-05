@@ -34,6 +34,7 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@sveltejs/adapter-node": "^5.2.5",
 		"bits-ui": "^0.21.16",
 		"clsx": "^2.1.1",
 		"dotenv": "^16.4.5",

@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { AI_URL, models } from '$lib/config';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, fetch }) => {
 	try {
 		const { messageArray, model } = await request.json();
 
