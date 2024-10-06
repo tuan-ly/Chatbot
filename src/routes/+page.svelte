@@ -23,6 +23,7 @@
 	let currentConversationId: string | null = null;
 	let userInput = '';
 	let selectedModel = 'gpt-4o';
+	let isAILoading = false;
 
 	onMount(() => {
 		if (browser) {
@@ -65,19 +66,34 @@
 		if (userInput.trim() && currentConversationId) {
 			const conversation = conversations.find((conv) => conv.id === currentConversationId);
 			if (conversation) {
+				// Add user message immediately
 				const userMessage = { content: userInput, role: 'user' };
 				conversation.messages = [...conversation.messages, userMessage];
 				saveConversationsToLocalStorage();
 
+				// Clear user input
 				userInput = '';
 
-				const aiResponse = await sendRequest(conversation.messages, selectedModel);
-				conversation.messages = [
-					...conversation.messages,
-					{ content: aiResponse, role: 'assistant' }
-				];
-				saveConversationsToLocalStorage();
-				conversations = [...conversations];
+				// Set AI loading state
+				isAILoading = true;
+
+				try {
+					// Add a placeholder for AI message
+					const aiPlaceholder = { content: '', role: 'assistant' };
+					conversation.messages = [...conversation.messages, aiPlaceholder];
+
+					// Send request to AI
+					const aiResponse = await sendRequest(conversation.messages, selectedModel);
+
+					// Update AI message with response
+					aiPlaceholder.content = aiResponse;
+				} catch (error) {
+					console.error('Error:', error);
+					// Handle error (e.g., show error message)
+				} finally {
+					isAILoading = false;
+					saveConversationsToLocalStorage();
+				}
 			}
 		}
 	}
@@ -118,7 +134,11 @@
 							message.role === 'user' ? 'bg-blue-100 ml-auto' : 'bg-gray-100'
 						}`}
 					>
-						<SvelteMarkdown source={message.content} />
+						{#if message.role === 'assistant' && message.content === '' && isAILoading}
+							<div class="loading-indicator">Loading...</div>
+						{:else}
+							<SvelteMarkdown source={message.content} />
+						{/if}
 					</div>
 				{/each}
 			{/if}
@@ -126,7 +146,7 @@
 		<div class="p-4 bg-white border-t">
 			<div class="flex space-x-2">
 				<Textarea bind:value={userInput} placeholder="Type your message..." class="flex-1" />
-				<Button on:click={sendMessage} disabled={!canSendMessage}>Send</Button>
+				<Button on:click={sendMessage} disabled={!canSendMessage || isAILoading}>Send</Button>
 			</div>
 			<div class="mt-2">
 				<select bind:value={selectedModel} class="w-full p-2 border rounded">
