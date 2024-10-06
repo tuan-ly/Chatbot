@@ -1,14 +1,6 @@
-import adapter from '@sveltejs/adapter-cloudflare';
+import adapter from '@sveltejs/adapter-auto';
 export default {
 	kit: {
-		adapter: adapter({
-			routes: { include: ['/*'], exclude: ['<all>'] },
-			platformProxy: {
-				configPath: 'wrangler.toml',
-				environment: undefined,
-				experimentalJsonConfig: false,
-				persist: false
-			}
-		})
+		adapter: adapter()
 	}
 };
