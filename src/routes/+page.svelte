@@ -22,7 +22,7 @@
 	let conversations: Conversation[] = [];
 	let currentConversationId: string | null = null;
 	let userInput = '';
-	let selectedModel = 'default';
+	let selectedModel = 'gpt-4o';
 
 	onMount(() => {
 		if (browser) {
