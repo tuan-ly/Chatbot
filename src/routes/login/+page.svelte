@@ -18,7 +18,7 @@
 		const { error } = await supabase.auth.signInWithOAuth({
 			provider: 'google',
 			options: {
-				redirect_uri: '/dashboard' // or any other URL you want to redirect to
+				redirectTo: '/dashboard' // or any other URL you want to redirect to
 			}
 		});
 		if (error) {
