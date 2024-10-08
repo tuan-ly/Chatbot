@@ -1,15 +1,13 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { onMount } from 'svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
-	import { browser } from '$app/environment';
-	import { AI_URL, models } from '$lib/config';
+	import { models } from '$lib/config';
 	import SvelteMarkdown from 'svelte-markdown';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
-	import type { SupabaseClient } from '@supabase/supabase-js';
+
 	import type { Conversation, Message, Profile } from '$lib/types';
 
 	let conversations: Conversation[] = [];
@@ -95,21 +93,18 @@
 			const response = await fetch('/api/ai-interact', {
 				method: 'POST',
 				headers: {
-					'Content-Type': 'application/json'
-					// Authorization: `Bearer ${session.access_token}`
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.access_token}`
 				},
 				body: JSON.stringify({
 					messages: formattedMessageArray,
 					model,
-					userId,
 					conversation_id: conversationId
 				})
 			});
 
 			const data = await response.json();
 			if (response.ok) {
-				// Update user credits
-				userCredits -= data.creditCost;
 				return data.result;
 			} else {
 				console.error('Error from server:', data.error);
@@ -212,7 +207,7 @@
 					alert("Sorry, I couldn't process your request. Please try again.");
 				} finally {
 					isAILoading = false;
-					// Optionally reload user credits
+					// Reload user credits from the server
 					if (userId) {
 						await loadUserCredits(userId);
 					}

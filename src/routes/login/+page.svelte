@@ -8,24 +8,16 @@
 		const { error } = await supabase.auth.signInWithPassword({ email, password });
 		if (error) {
 			alert(error.message);
-		} else {
-			// Redirect to dashboard
-			goto('/dashboard');
 		}
 	};
 
 	const signInWithGoogle = async () => {
 		const { error } = await supabase.auth.signInWithOAuth({
-			provider: 'google',
-			options: {
-				redirectTo: '/dashboard' // or any other URL you want to redirect to
-			}
+			provider: 'google'
 		});
 		if (error) {
 			alert(error.message);
 		}
-		// Redirect to dashboard
-		goto('/dashboard');
 	};
 </script>
 
