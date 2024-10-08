@@ -8,9 +8,6 @@
 	function handleSelectConversation(id: string) {
 		selectConversation(id);
 	}
-	// $: {
-	// 	console.log('Sidebar conversations updated:', conversations);
-	// }
 </script>
 
 <div class="w-64 bg-gray-800 text-white h-full flex flex-col">

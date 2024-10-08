@@ -247,8 +247,10 @@
 		const { data, error } = await supabase
 			.from('conversations')
 			.insert({ title, user_id: userId })
+			.select()
 			.single();
 
+		console.log('data', data);
 		if (error) {
 			console.error('Error creating conversation:', error);
 		} else if (data) {
@@ -264,9 +266,7 @@
 			currentConversation = newConversation;
 		}
 	}
-	$: {
-		console.log('Conversations updated:', conversations);
-	}
+
 	// Helper function to check if the current conversation has any messages
 	$: currentConversation = conversations.find((conv) => conv.id === currentConversationId);
 	$: canSendMessage = userInput.trim() !== '';

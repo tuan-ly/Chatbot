@@ -66,10 +66,10 @@
 	});
 </script>
 
-{#if loading}
+<!-- {#if loading}
 	<p>Loading...</p>
 {:else if session}
 	<p>Credits: {$userCredits}</p>
-{/if}
+{/if} -->
 
 <slot />
