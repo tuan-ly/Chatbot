@@ -11,6 +11,7 @@
 		} else {
 			// Redirect to dashboard
 			goto('/dashboard');
+		}
 	};
 
 	const signInWithGoogle = async () => {
