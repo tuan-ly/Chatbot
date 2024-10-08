@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-
-	export let conversations: { id: string; title: string }[];
+	import { type Conversation } from '$lib/types';
+	export let conversations: Conversation[];
 	export let selectConversation: (id: string) => void;
 	export let addConversation: () => void;
 
 	function handleSelectConversation(id: string) {
 		selectConversation(id);
 	}
+	// $: {
+	// 	console.log('Sidebar conversations updated:', conversations);
+	// }
 </script>
 
 <div class="w-64 bg-gray-800 text-white h-full flex flex-col">

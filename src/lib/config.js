@@ -1,4 +1,6 @@
 export const AI_URL = import.meta.env.VITE_AI_URL;
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const models = {
 	'o1-preview': 'GPT-O1',
