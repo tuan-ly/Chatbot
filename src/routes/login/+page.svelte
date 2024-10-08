@@ -1,5 +1,6 @@
 <script>
 	import { supabase } from '$lib/supabaseClient';
+	import { goto } from '$app/navigation';
 	let email = '';
 	let password = '';
 
@@ -9,7 +10,7 @@
 			alert(error.message);
 		} else {
 			// Redirect to dashboard
-		}
+			goto('/dashboard');
 	};
 
 	const signInWithGoogle = async () => {
@@ -19,6 +20,8 @@
 		if (error) {
 			alert(error.message);
 		}
+		// Redirect to dashboard
+		goto('/dashboard');
 	};
 </script>
 
