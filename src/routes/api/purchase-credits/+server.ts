@@ -4,7 +4,9 @@
 
 // const stripe = new Stripe('<YOUR_STRIPE_SECRET_KEY>');
 
-// export async function POST({ request, locals }) {
+export async function POST({ request, locals }) {
+	return new Response('On maintenance', { status: 401 });
+}
 // 	const user = locals.user;
 // 	if (!user) {
 // 		return new Response('Unauthorized', { status: 401 });

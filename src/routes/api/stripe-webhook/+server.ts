@@ -6,7 +6,9 @@
 // 	return new Response(`Webhook Error: ${err.message}`, { status: 400 });
 // }
 
-// export async function POST({ request }) {
+export async function POST({ request }) {
+	return new Response('On maintenance', { status: 401 });
+}
 // 	const signature = request.headers.get('stripe-signature');
 // 	const body = await request.text();
 
