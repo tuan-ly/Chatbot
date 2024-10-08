@@ -16,7 +16,10 @@
 
 	const signInWithGoogle = async () => {
 		const { error } = await supabase.auth.signInWithOAuth({
-			provider: 'google'
+			provider: 'google',
+			options: {
+				redirect_uri: '/dashboard' // or any other URL you want to redirect to
+			}
 		});
 		if (error) {
 			alert(error.message);
