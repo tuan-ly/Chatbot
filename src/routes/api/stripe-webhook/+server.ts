@@ -1,10 +1,10 @@
-import Stripe from 'stripe';
-import supabaseAdmin from '$lib/supabaseAdmin';
+// import Stripe from 'stripe';
+// import supabaseAdmin from '$lib/supabaseAdmin';
 
-const stripe = new Stripe('<YOUR_STRIPE_SECRET_KEY>');
-export async function POST({ request }) {
-	return new Response(`Webhook Error: ${err.message}`, { status: 400 });
-}
+// const stripe = new Stripe('<YOUR_STRIPE_SECRET_KEY>');
+// export async function POST({ request }) {
+// 	return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+// }
 
 // export async function POST({ request }) {
 // 	const signature = request.headers.get('stripe-signature');
