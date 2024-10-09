@@ -1,14 +1,28 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { onMount } from 'svelte';
-	import Sidebar from '$lib/components/Sidebar.svelte';
-	import { models } from '$lib/config';
+	import { ScrollArea } from '$lib/components/ui/scroll-area';
+	import { Separator } from '$lib/components/ui/separator';
+	import { Card } from '$lib/components/ui/card';
+	import { cn } from '$lib/utils';
+	import {
+		PanelLeftOpen,
+		PanelLeftClose,
+		Send,
+		Plus,
+		Settings,
+		Paperclip,
+		X,
+		Image,
+		FileText
+	} from 'lucide-svelte';
 	import SvelteMarkdown from 'svelte-markdown';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
-
 	import type { Conversation, Message, Profile } from '$lib/types';
+	import { onMount } from 'svelte';
+	import { models } from '$lib/config';
+	import MessageContent from '$lib/components/MessageContent.svelte';
 
 	let conversations: Conversation[] = [];
 	let currentConversationId: string | null = null;
@@ -19,6 +33,7 @@
 	let canSendMessage = false;
 	let userCredits = 0;
 	let userId: string | null = null;
+	let isSidebarOpen = true;
 
 	onMount(async () => {
 		const { data: session } = await supabase.auth.getSession();
@@ -48,6 +63,9 @@
 		}
 	});
 
+	function toggleSidebar() {
+		isSidebarOpen = !isSidebarOpen;
+	}
 	async function loadConversationsFromSupabase(userId: string) {
 		const { data, error } = await supabase
 			.from('conversations')
@@ -118,101 +136,223 @@
 		}
 	}
 
+	// New state variables for file handling
+	let attachments: File[] = [];
+	let isDragging = false;
+	const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+	const ALLOWED_TYPES = [
+		'image/jpeg',
+		'image/png',
+		'image/gif',
+		'application/pdf',
+		'text/plain',
+		'application/msword',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+	];
+
+	// Handle file selection
+	function handleFileSelect(event: Event) {
+		const input = event.target as HTMLInputElement;
+		if (input.files) {
+			addFiles(Array.from(input.files));
+		}
+	}
+
+	// Handle drag and drop
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault();
+		isDragging = true;
+	}
+
+	function handleDragLeave(event: DragEvent) {
+		event.preventDefault();
+		isDragging = false;
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		isDragging = false;
+
+		if (event.dataTransfer?.files) {
+			addFiles(Array.from(event.dataTransfer.files));
+		}
+	}
+
+	// Add files to attachments array
+	function addFiles(files: File[]) {
+		for (const file of files) {
+			if (file.size > MAX_FILE_SIZE) {
+				alert(`File ${file.name} is too large. Maximum size is 10MB.`);
+				continue;
+			}
+
+			if (!ALLOWED_TYPES.includes(file.type)) {
+				alert(`File type ${file.type} is not supported.`);
+				continue;
+			}
+
+			attachments = [...attachments, file];
+		}
+	}
+
+	// Remove attachment
+	function removeAttachment(index: number) {
+		attachments = attachments.filter((_, i) => i !== index);
+	}
+
+	// Get file icon based on type
+	function getFileIcon(type: string) {
+		if (type.startsWith('image/')) {
+			return Image;
+		}
+		return FileText;
+	}
+
 	async function sendMessage() {
 		if (!userId) {
 			alert('You must be logged in to send messages.');
 			return;
 		}
 
-		if (userInput.trim() && currentConversationId) {
-			const conversation = conversations.find((conv) => conv.id === currentConversationId);
-			if (conversation) {
-				if (userCredits <= 0) {
-					alert('You have insufficient credits to send a message.');
-					return;
+		if ((!userInput.trim() && attachments.length === 0) || !currentConversationId) {
+			return;
+		}
+
+		if (userCredits <= 0) {
+			alert('You have insufficient credits to send a message.');
+			return;
+		}
+
+		let messageContent = userInput.trim();
+		let uploadedFiles = [];
+
+		// Only handle file uploads if there are attachments
+		if (attachments.length > 0) {
+			const formData = new FormData();
+			attachments.forEach((file, index) => {
+				formData.append(`file${index}`, file);
+			});
+
+			try {
+				const response = await fetch('/api/upload', {
+					method: 'POST',
+					body: formData
+				});
+
+				if (!response.ok) {
+					throw new Error('Failed to upload files');
 				}
 
-				// Add user message immediately
-				const userMessage: Message = {
-					id: '', // Will be updated after Supabase insert
+				uploadedFiles = await response.json();
+
+				// Only create JSON structure if we have attachments
+				messageContent = JSON.stringify({
+					text: userInput.trim(),
+					attachments: uploadedFiles
+				});
+			} catch (error) {
+				console.error('Upload error:', error);
+				alert('Failed to upload files. Please try again.');
+				return;
+			}
+		}
+
+		// Add user message immediately
+		const userMessage: Message = {
+			id: '',
+			conversation_id: currentConversationId,
+			content: messageContent,
+			role: 'user',
+			created_at: new Date().toISOString()
+		};
+
+		// Update conversation with new message
+		if (currentConversation) {
+			currentConversation.messages = [...currentConversation.messages, userMessage];
+		}
+		const { data: newMessage, error } = await supabase
+			.from('messages')
+			.insert({
+				conversation_id: currentConversationId,
+				role: 'user',
+				content: userInput
+			})
+			.select()
+			.single();
+
+		if (error) {
+			console.error('Error saving user message:', error);
+		} else if (newMessage) {
+			// Update message with ID and created_at from Supabase
+			userMessage.id = (newMessage as Message).id;
+			userMessage.created_at = (newMessage as Message).created_at;
+		}
+		// Clear input and attachments
+		userInput = '';
+		attachments = [];
+		isAILoading = true;
+
+		try {
+			// Save message to database and get AI response
+			const response = await sendRequest(
+				currentConversation?.messages || [],
+				selectedModel,
+				currentConversationId
+			);
+
+			if (response) {
+				// Add AI response to conversation
+				const aiMessage: Message = {
+					id: '',
 					conversation_id: currentConversationId,
-					content: userInput,
-					role: 'user',
+					content: response,
+					role: 'assistant',
 					created_at: new Date().toISOString()
 				};
-				conversation.messages = [...conversation.messages, userMessage];
 
-				// Save the user message to Supabase
-				const { data: newMessage, error } = await supabase
+				if (currentConversation) {
+					currentConversation.messages = [...currentConversation.messages, aiMessage];
+				}
+				// Save AI message to Supabase
+				const { data: newAIMessage, error: aiMessageError } = await supabase
 					.from('messages')
 					.insert({
 						conversation_id: currentConversationId,
-						role: 'user',
-						content: userInput
+						role: 'assistant',
+						content: response
 					})
 					.single();
 
-				if (error) {
-					console.error('Error saving user message:', error);
-				} else if (newMessage) {
-					// Update message with ID and created_at from Supabase
-					userMessage.id = (newMessage as Message).id;
-					userMessage.created_at = (newMessage as Message).created_at;
-				}
-
-				// Clear user input
-				userInput = '';
-
-				// Set AI loading state
-				isAILoading = true;
-				console.log('conversation.messages', conversation.messages);
-				try {
-					// Send request to AI
-					const aiResponse = await sendRequest(
-						conversation.messages,
-						selectedModel,
-						currentConversationId
-					);
-
-					if (aiResponse !== null) {
-						// Add AI message
-						const aiMessage: Message = {
-							id: '', // Will be updated after Supabase insert
-							conversation_id: currentConversationId,
-							content: aiResponse,
-							role: 'assistant',
-							created_at: new Date().toISOString()
-						};
-						conversation.messages = [...conversation.messages, aiMessage];
-
-						// Save AI message to Supabase
-						const { data: newAIMessage, error: aiMessageError } = await supabase
-							.from('messages')
-							.insert({
-								conversation_id: currentConversationId,
-								role: 'assistant',
-								content: aiResponse
-							})
-							.single();
-
-						if (aiMessageError) {
-							console.error('Error saving AI message:', aiMessageError);
-						} else if (newAIMessage) {
-							aiMessage.id = (newAIMessage as Message).id;
-							aiMessage.created_at = (newAIMessage as Message).created_at;
-						}
-					}
-				} catch (error) {
-					console.error('Error:', error);
-					alert("Sorry, I couldn't process your request. Please try again.");
-				} finally {
-					isAILoading = false;
-					// Reload user credits from the server
-					if (userId) {
-						await loadUserCredits(userId);
-					}
+				if (aiMessageError) {
+					console.error('Error saving AI message:', aiMessageError);
+				} else if (newAIMessage) {
+					aiMessage.id = (newAIMessage as Message).id;
+					aiMessage.created_at = (newAIMessage as Message).created_at;
 				}
 			}
+		} catch (error) {
+			console.error('Error:', error);
+			alert("Sorry, I couldn't process your request. Please try again.");
+		} finally {
+			isAILoading = false;
+		}
+	}
+
+	// Function to render message content
+	function renderMessage(message: Message) {
+		try {
+			// Try to parse as JSON (for messages with attachments)
+			const content = JSON.parse(message.content);
+			return {
+				text: content.text,
+				attachments: content.attachments
+			};
+		} catch {
+			// If not JSON, treat as regular text message
+			return {
+				text: message.content,
+				attachments: []
+			};
 		}
 	}
 
@@ -272,77 +412,235 @@
 	$: canSendMessage = userInput.trim() !== '';
 </script>
 
-<div class="flex h-screen bg-gray-100">
-	<Sidebar {conversations} {selectConversation} {addConversation} />
-	<div class="flex-1 flex flex-col">
-		<div class="flex-1 overflow-y-auto p-4">
-			{#if currentConversationId}
-				{#if currentConversation?.messages.length === 0}
-					<div class="text-center text-gray-500 mt-8">
-						Start a new conversation by typing a message below
-					</div>
-				{/if}
-				{#each currentConversation?.messages || [] as message}
-					<div
-						class={`mb-4 p-2 rounded ${
-							message.role === 'user' ? 'bg-blue-100 ml-auto' : 'bg-gray-100'
-						}`}
-					>
-						{#if message.role === 'assistant' && isAILoading && !message.content}
-							<div class="loading-indicator">Loading...</div>
-						{:else}
-							<SvelteMarkdown source={message.content} />
-						{/if}
-					</div>
-				{/each}
-			{/if}
-		</div>
-		<div class="p-4 bg-white border-t">
-			<div class="flex space-x-2">
-				<Textarea bind:value={userInput} placeholder="Type your message..." class="flex-1" />
-				<Button on:click={sendMessage} disabled={!canSendMessage || isAILoading}>Send</Button>
-			</div>
-			<div class="mt-2">
-				<select bind:value={selectedModel} class="w-full p-2 border rounded">
-					{#each Object.entries(models) as [value, label]}
-						<option {value}>{label}</option>
+<div class="flex h-screen bg-background">
+	<!-- Sidebar -->
+	<div
+		class={cn(
+			'border-r bg-muted/40 transition-all duration-300',
+			isSidebarOpen ? 'w-[300px]' : 'w-0'
+		)}
+	>
+		{#if isSidebarOpen}
+			<div class="flex h-full flex-col p-4">
+				<div class="flex items-center justify-between mb-4">
+					<Button variant="outline" class="w-full" on:click={addConversation}>
+						<Plus class="mr-2 h-4 w-4" />
+						New Chat
+					</Button>
+				</div>
+
+				<ScrollArea class="flex-1">
+					{#each conversations as conversation}
+						<Button
+							variant={currentConversationId === conversation.id ? 'secondary' : 'ghost'}
+							class="w-full justify-start mb-1 truncate"
+							on:click={() => selectConversation(conversation.id)}
+						>
+							{conversation.title}
+						</Button>
 					{/each}
-				</select>
+				</ScrollArea>
+
+				<Separator class="my-4" />
+
+				<div class="flex flex-col gap-2">
+					<div class="flex items-center justify-between px-2">
+						<span class="text-sm text-muted-foreground">Credits: {userCredits}</span>
+						<Button variant="ghost" size="icon">
+							<Settings class="h-4 w-4" />
+						</Button>
+					</div>
+				</div>
 			</div>
-			<div class="mt-2">
-				<p>User Credits: {userCredits}</p>
+		{/if}
+	</div>
+
+	<!-- Main Content -->
+	<div class="flex-1 flex flex-col relative">
+		<!-- Toggle Sidebar Button -->
+		<Button variant="ghost" size="icon" class="absolute top-4 left-4 z-10" on:click={toggleSidebar}>
+			{#if isSidebarOpen}
+				<PanelLeftClose class="h-4 w-4" />
+			{:else}
+				<PanelLeftOpen class="h-4 w-4" />
+			{/if}
+		</Button>
+
+		<!-- Messages Area -->
+		<div class="flex-1 flex flex-col relative">
+			<ScrollArea class="flex-1 p-4">
+				{#if currentConversationId}
+					{#if currentConversation?.messages.length === 0}
+						<div class="flex h-full items-center justify-center">
+							<div class="text-center space-y-2">
+								<h3 class="text-lg font-semibold">Welcome to Chat</h3>
+								<p class="text-muted-foreground">Start a conversation below</p>
+							</div>
+						</div>
+					{:else}
+						{#each currentConversation?.messages || [] as message}
+							<div
+								class={cn('mb-8 flex', message.role === 'user' ? 'justify-end' : 'justify-start')}
+							>
+								<Card
+									class={cn(
+										'max-w-[80%] p-4',
+										message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+									)}
+								>
+									{#if message.role === 'assistant' && isAILoading && !message.content}
+										<div class="loading-dots">
+											<span class="dot" />
+											<span class="dot" />
+											<span class="dot" />
+										</div>
+									{:else if message.content}
+										{@const content = renderMessage(message)}
+										<SvelteMarkdown source={content.text} />
+										{#if content.attachments?.length > 0}
+											<div class="mt-2 space-y-2">
+												{#each content.attachments as attachment}
+													<div class="flex items-center space-x-2">
+														<a
+															href={attachment.url}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="flex items-center space-x-2 text-blue-500 hover:text-blue-600"
+														>
+															<svelte:component
+																this={getFileIcon(attachment.type)}
+																class="h-4 w-4"
+															/>
+															<span>{attachment.name}</span>
+														</a>
+													</div>
+												{/each}
+											</div>
+										{/if}
+									{/if}
+								</Card>
+							</div>
+						{/each}
+					{/if}
+				{/if}
+			</ScrollArea>
+
+			<!-- Input Area -->
+			<div
+				class="border-t p-4"
+				on:dragover={handleDragOver}
+				on:dragleave={handleDragLeave}
+				on:drop={handleDrop}
+			>
+				<div class="container max-w-4xl mx-auto">
+					<!-- Show attachments preview only when there are attachments -->
+					{#if attachments.length > 0}
+						<div class="mb-4 flex flex-wrap gap-2">
+							{#each attachments as file, index}
+								<div class="flex items-center gap-2 bg-muted p-2 rounded-md">
+									<svelte:component this={getFileIcon(file.type)} class="h-4 w-4" />
+									<span class="text-sm truncate max-w-[200px]">
+										{file.name}
+									</span>
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-4 w-4 p-0"
+										on:click={() => removeAttachment(index)}
+									>
+										<X class="h-3 w-3" />
+									</Button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+
+					<div class="flex gap-2">
+						<select
+							bind:value={selectedModel}
+							class="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm"
+						>
+							{#each Object.entries(models) as [value, label]}
+								<option {value}>{label}</option>
+							{/each}
+						</select>
+
+						<div class="flex-1 flex gap-2">
+							<div class="flex-1 relative">
+								<Textarea
+									bind:value={userInput}
+									placeholder="Type your message..."
+									class="min-h-[50px] pr-10"
+									rows="1"
+								/>
+								<div class="absolute right-2 bottom-2">
+									<label class="cursor-pointer">
+										<input
+											type="file"
+											multiple
+											class="hidden"
+											accept={ALLOWED_TYPES.join(',')}
+											on:change={handleFileSelect}
+										/>
+										<Paperclip class="h-4 w-4 text-muted-foreground hover:text-foreground" />
+									</label>
+								</div>
+							</div>
+							<Button
+								class="self-end"
+								on:click={sendMessage}
+								disabled={(!userInput.trim() && attachments.length === 0) || isAILoading}
+							>
+								<Send class="h-4 w-4" />
+							</Button>
+						</div>
+					</div>
+
+					{#if isDragging}
+						<div
+							class="absolute inset-0 bg-background/80 flex items-center justify-center border-2 border-dashed border-primary rounded-lg"
+						>
+							<p class="text-lg font-medium">Drop files here</p>
+						</div>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>
 </div>
 
 <style>
-	:global(.svelte-markdown code) {
-		background-color: #f0f0f0;
-		padding: 2px 4px;
-		border-radius: 4px;
+	.loading-dots {
+		display: flex;
+		gap: 4px;
+		align-items: center;
+		justify-center: center;
 	}
 
-	:global(.svelte-markdown pre) {
-		background-color: #f0f0f0;
-		padding: 1em;
-		border-radius: 4px;
-		overflow-x: auto;
+	.dot {
+		width: 8px;
+		height: 8px;
+		background-color: currentColor;
+		border-radius: 50%;
+		animation: bounce 1.4s infinite ease-in-out both;
 	}
 
-	:global(.svelte-markdown blockquote) {
-		border-left: 4px solid #ccc;
-		margin: 0;
-		padding-left: 1em;
+	.dot:nth-child(1) {
+		animation-delay: -0.32s;
 	}
 
-	:global(.svelte-markdown table) {
-		border-collapse: collapse;
-		margin: 1em 0;
+	.dot:nth-child(2) {
+		animation-delay: -0.16s;
 	}
 
-	:global(.svelte-markdown th, .svelte-markdown td) {
-		border: 1px solid #ccc;
-		padding: 0.5em;
+	@keyframes bounce {
+		0%,
+		80%,
+		100% {
+			transform: scale(0);
+		}
+		40% {
+			transform: scale(1);
+		}
 	}
 </style>
