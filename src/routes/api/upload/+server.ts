@@ -1,35 +1,29 @@
 // routes/api/upload/+server.ts
-import { supabase } from '$lib/supabaseClient';
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from './$types';
+import { MessageHandler } from '$lib/messageHandler';
 
 export async function POST(event: RequestEvent) {
 	try {
 		const formData = await event.request.formData();
-		const uploadedFiles = [];
-		console.log('formData', formData);
-		for (const [key, file] of formData.entries()) {
+		const files: File[] = [];
+
+		for (const [_, file] of formData.entries()) {
 			if (file instanceof File) {
-				const fileExt = file.name.split('.').pop();
-				const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-				const filePath = `uploads/${fileName}`;
-
-				const { data, error } = await supabase.storage.from('attachments').upload(filePath, file);
-
-				if (error) throw error;
-
-				const { data: publicUrl } = supabase.storage.from('attachments').getPublicUrl(filePath);
-
-				uploadedFiles.push({
-					name: file.name,
-					type: file.type,
-					size: file.size,
-					url: publicUrl.publicUrl
-				});
+				files.push(file);
 			}
 		}
 
-		return json(uploadedFiles);
+		const contents = await MessageHandler.processUploadedFiles(files);
+
+		return json(
+			contents.map((content) => ({
+				name: files[0].name,
+				type: files[0].type,
+				size: files[0].size,
+				url: content.image_url || content.file_url
+			}))
+		);
 	} catch (error) {
 		console.error('Upload error:', error);
 		return new Response(JSON.stringify({ error: 'Upload failed' }), {

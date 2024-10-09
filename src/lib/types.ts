@@ -1,8 +1,23 @@
+export type ContentItem = {
+	type: 'text' | 'image_url' | 'file_url';
+	text?: string;
+	image_url?: string;
+	file_url?: string;
+};
+export type ContentItem_Old = {
+	type: 'text' | 'image';
+	text?: string;
+	source?: {
+		type: string;
+		media_type: string;
+		data: string;
+	};
+};
 export interface Message {
 	id: string;
 	conversation_id: string;
 	role: 'user' | 'assistant';
-	content: string;
+	content: ContentItem[];
 	created_at: string;
 }
 

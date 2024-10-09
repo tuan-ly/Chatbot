@@ -19,11 +19,13 @@
 	import SvelteMarkdown from 'svelte-markdown';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
-	import type { Conversation, Message, Profile } from '$lib/types';
+	import type { Conversation, Message, Profile, ContentItem } from '$lib/types';
 	import { onMount } from 'svelte';
 	import { models } from '$lib/config';
 	import MessageContent from '$lib/components/MessageContent.svelte';
-
+	import { MessageHandler } from '$lib/messageHandler';
+	// src/routes/dashboard/+page.ts
+	// Load conversations from Supabase
 	let conversations: Conversation[] = [];
 	let currentConversationId: string | null = null;
 	let currentConversation: Conversation | undefined;
@@ -209,47 +211,25 @@
 	}
 
 	async function sendMessage() {
-		if (!userId) {
-			alert('You must be logged in to send messages.');
+		if (!userId || (!userInput.trim() && attachments.length === 0) || !currentConversationId) {
 			return;
 		}
 
-		if ((!userInput.trim() && attachments.length === 0) || !currentConversationId) {
-			return;
-		}
+		const contents: ContentItem[] = [];
 
-		if (userCredits <= 0) {
-			alert('You have insufficient credits to send a message.');
-			return;
-		}
-
-		let messageContent = userInput.trim();
-		let uploadedFiles = [];
-
-		// Only handle file uploads if there are attachments
-		if (attachments.length > 0) {
-			const formData = new FormData();
-			attachments.forEach((file, index) => {
-				formData.append(`file${index}`, file);
+		// Add text content if present
+		if (userInput.trim()) {
+			contents.push({
+				type: 'text',
+				text: userInput.trim()
 			});
+		}
 
+		// Process attachments if present
+		if (attachments.length > 0) {
 			try {
-				const response = await fetch('/api/upload', {
-					method: 'POST',
-					body: formData
-				});
-
-				if (!response.ok) {
-					throw new Error('Failed to upload files');
-				}
-
-				uploadedFiles = await response.json();
-
-				// Only create JSON structure if we have attachments
-				messageContent = JSON.stringify({
-					text: userInput.trim(),
-					attachments: uploadedFiles
-				});
+				const uploadedContents = await MessageHandler.processUploadedFiles(attachments);
+				contents.push(...uploadedContents);
 			} catch (error) {
 				console.error('Upload error:', error);
 				alert('Failed to upload files. Please try again.');
@@ -257,43 +237,26 @@
 			}
 		}
 
-		// Add user message immediately
-		const userMessage: Message = {
-			id: '',
-			conversation_id: currentConversationId,
-			content: messageContent,
-			role: 'user',
-			created_at: new Date().toISOString()
-		};
+		// Save user message
+		const userMessage = await MessageHandler.saveMessage(currentConversationId, 'user', contents);
+
+		if (!userMessage) {
+			alert('Failed to save message. Please try again.');
+			return;
+		}
 
 		// Update conversation with new message
 		if (currentConversation) {
 			currentConversation.messages = [...currentConversation.messages, userMessage];
 		}
-		const { data: newMessage, error } = await supabase
-			.from('messages')
-			.insert({
-				conversation_id: currentConversationId,
-				role: 'user',
-				content: userInput
-			})
-			.select()
-			.single();
 
-		if (error) {
-			console.error('Error saving user message:', error);
-		} else if (newMessage) {
-			// Update message with ID and created_at from Supabase
-			userMessage.id = (newMessage as Message).id;
-			userMessage.created_at = (newMessage as Message).created_at;
-		}
 		// Clear input and attachments
 		userInput = '';
 		attachments = [];
 		isAILoading = true;
 
 		try {
-			// Save message to database and get AI response
+			// Get AI response
 			const response = await sendRequest(
 				currentConversation?.messages || [],
 				selectedModel,
@@ -301,33 +264,16 @@
 			);
 
 			if (response) {
-				// Add AI response to conversation
-				const aiMessage: Message = {
-					id: '',
-					conversation_id: currentConversationId,
-					content: response,
-					role: 'assistant',
-					created_at: new Date().toISOString()
-				};
+				// Save AI message
+				const aiMessage = await MessageHandler.saveMessage(currentConversationId, 'assistant', [
+					{
+						type: 'text',
+						text: response
+					}
+				]);
 
-				if (currentConversation) {
+				if (aiMessage && currentConversation) {
 					currentConversation.messages = [...currentConversation.messages, aiMessage];
-				}
-				// Save AI message to Supabase
-				const { data: newAIMessage, error: aiMessageError } = await supabase
-					.from('messages')
-					.insert({
-						conversation_id: currentConversationId,
-						role: 'assistant',
-						content: response
-					})
-					.single();
-
-				if (aiMessageError) {
-					console.error('Error saving AI message:', aiMessageError);
-				} else if (newAIMessage) {
-					aiMessage.id = (newAIMessage as Message).id;
-					aiMessage.created_at = (newAIMessage as Message).created_at;
 				}
 			}
 		} catch (error) {
@@ -488,36 +434,7 @@
 										message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
 									)}
 								>
-									{#if message.role === 'assistant' && isAILoading && !message.content}
-										<div class="loading-dots">
-											<span class="dot" />
-											<span class="dot" />
-											<span class="dot" />
-										</div>
-									{:else if message.content}
-										{@const content = renderMessage(message)}
-										<SvelteMarkdown source={content.text} />
-										{#if content.attachments?.length > 0}
-											<div class="mt-2 space-y-2">
-												{#each content.attachments as attachment}
-													<div class="flex items-center space-x-2">
-														<a
-															href={attachment.url}
-															target="_blank"
-															rel="noopener noreferrer"
-															class="flex items-center space-x-2 text-blue-500 hover:text-blue-600"
-														>
-															<svelte:component
-																this={getFileIcon(attachment.type)}
-																class="h-4 w-4"
-															/>
-															<span>{attachment.name}</span>
-														</a>
-													</div>
-												{/each}
-											</div>
-										{/if}
-									{/if}
+									<MessageContent {message} isLoading={isAILoading && !message.content} />
 								</Card>
 							</div>
 						{/each}
