@@ -123,18 +123,18 @@ export class MessageHandler {
 
 		for (const file of files) {
 			try {
-				const fileExt = file.name.split('.').pop();
-				const fileName = `fileName-${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-				const filePath = `${session.user.id}/${fileName}`;
+				// const fileExt = file.name.split('.').pop();
+				// const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+				// const filePath = `${session.user.id}/${fileName}`;
 
 				// // Upload with retry logic
-				await this.uploadWithRetry(file, filePath);
+				// await this.uploadWithRetry(file, filePath);
 
 				// Get public URL
-				const { data: publicUrl } = supabase.storage.from('attachments').getPublicUrl(filePath);
+				// const { data: publicUrl } = supabase.storage.from('attachments').getPublicUrl(filePath);
 
 				// Process the file into a content item
-				const contentItem = await this.handleDocumentAttachment(file, publicUrl);
+				const contentItem = await this.handleDocumentAttachment(file);
 				content.push(contentItem);
 			} catch (error) {
 				console.error(`Error uploading file ${file.name}:`, error);
@@ -158,7 +158,7 @@ export class MessageHandler {
 		});
 	}
 
-	private static async handleDocumentAttachment(file: File, url: string): Promise<ContentItem> {
+	private static async handleDocumentAttachment(file: File): Promise<ContentItem> {
 		try {
 			if (file.type.startsWith('text/')) {
 				const textContent = await file.text();
