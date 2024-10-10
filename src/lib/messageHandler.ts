@@ -1,6 +1,6 @@
 // lib/messageHandler.ts
-import fs from 'fs';
-import path from 'path';
+// import fs from 'fs';
+// import path from 'path';
 import { supabase } from '$lib/supabaseClient';
 import type {
 	OpenAIMessage,
@@ -144,10 +144,10 @@ export class MessageHandler {
 
 		return content;
 	}
-	private static encodeImageToBase64(imagePath) {
-		const image = fs.readFileSync(path.resolve(imagePath));
-		return image.toString('base64');
-	}
+	// private static encodeImageToBase64(imagePath) {
+	// 	const image = fs.readFileSync(path.resolve(imagePath));
+	// 	return image.toString('base64');
+	// }
 
 	private static fileToBase64(file: File): Promise<string> {
 		return new Promise((resolve, reject) => {
