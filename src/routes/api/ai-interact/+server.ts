@@ -82,7 +82,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 async function getAIResponse(
-	messageArray: Array<{ role: string; content: string }>,
+	messages: Array<{ role: string; content: string }>,
 	model: string
 ): Promise<{ result: string } | { error: string }> {
 	try {
@@ -91,7 +91,7 @@ async function getAIResponse(
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ messages: messageArray, model })
+			body: JSON.stringify({ messages, model })
 		});
 
 		if (!response.ok) {
