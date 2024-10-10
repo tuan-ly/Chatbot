@@ -106,10 +106,9 @@
 			if (!session) {
 				throw new Error('User not authenticated');
 			}
-			const formattedMessageArray = messageArray.map((message) => ({
-				role: message.role,
-				content: message.content
-			}));
+			const formattedMessageArray = MessageHandler.formatMesssages(messageArray, model);
+
+			console.log('formattedMessageArray', formattedMessageArray);
 			const response = await fetch('/api/ai-interact', {
 				method: 'POST',
 				headers: {
@@ -141,7 +140,7 @@
 	// New state variables for file handling
 	let attachments: File[] = [];
 	let isDragging = false;
-	const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+	const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 	const ALLOWED_TYPES = [
 		'image/jpeg',
 		'image/png',
@@ -184,7 +183,7 @@
 	function addFiles(files: File[]) {
 		for (const file of files) {
 			if (file.size > MAX_FILE_SIZE) {
-				alert(`File ${file.name} is too large. Maximum size is 10MB.`);
+				alert(`File ${file.name} is too large. Maximum size is 20MB.`);
 				continue;
 			}
 
@@ -215,11 +214,11 @@
 			return;
 		}
 
-		const contents: ContentItem[] = [];
+		const content: ContentItem[] = [];
 
 		// Add text content if present
 		if (userInput.trim()) {
-			contents.push({
+			content.push({
 				type: 'text',
 				text: userInput.trim()
 			});
@@ -229,7 +228,7 @@
 		if (attachments.length > 0) {
 			try {
 				const uploadedContents = await MessageHandler.processUploadedFiles(attachments);
-				contents.push(...uploadedContents);
+				content.push(...uploadedContents);
 			} catch (error) {
 				console.error('Upload error:', error);
 				alert('Failed to upload files. Please try again.');
@@ -238,7 +237,7 @@
 		}
 
 		// Save user message
-		const userMessage = await MessageHandler.saveMessage(currentConversationId, 'user', contents);
+		const userMessage = await MessageHandler.saveMessage(currentConversationId, 'user', content);
 
 		if (!userMessage) {
 			alert('Failed to save message. Please try again.');
