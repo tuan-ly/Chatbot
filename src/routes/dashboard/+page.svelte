@@ -14,7 +14,8 @@
 		Paperclip,
 		X,
 		Image,
-		FileText
+		FileText,
+		Trash2
 	} from 'lucide-svelte';
 	import SvelteMarkdown from 'svelte-markdown';
 	import { supabase } from '$lib/supabaseClient';
@@ -23,6 +24,7 @@
 	import { onMount } from 'svelte';
 	import { models } from '$lib/config';
 	import MessageContent from '$lib/components/MessageContent.svelte';
+	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import { MessageHandler } from '$lib/messageHandler';
 	// src/routes/dashboard/+page.ts
 	// Load conversations from Supabase
@@ -209,7 +211,7 @@
 		return FileText;
 	}
 
-	async function sendMessage() {
+	async function sendMessage(retry = false) {
 		if (!userId || (!userInput.trim() && attachments.length === 0) || !currentConversationId) {
 			return;
 		}
@@ -250,6 +252,7 @@
 		}
 
 		// Clear input and attachments
+		const originalInput = userInput;
 		userInput = '';
 		attachments = [];
 		isAILoading = true;
@@ -277,7 +280,17 @@
 			}
 		} catch (error) {
 			console.error('Error:', error);
-			alert("Sorry, I couldn't process your request. Please try again.");
+			if (!retry) {
+				const shouldRetry = confirm(
+					"Sorry, I couldn't process your request. Would you like to try again?"
+				);
+				if (shouldRetry) {
+					userInput = originalInput;
+					sendMessage(true);
+				}
+			} else {
+				alert("Sorry, I couldn't process your request. Please try again later.");
+			}
 		} finally {
 			isAILoading = false;
 		}
@@ -351,7 +364,42 @@
 			currentConversation = newConversation;
 		}
 	}
+	async function renameConversation(id: string) {
+		const conversation = conversations.find((conv) => conv.id === id);
+		if (!conversation) return;
 
+		const newTitle = prompt('Enter new conversation title:', conversation.title);
+		if (!newTitle) return;
+
+		const { error } = await supabase.from('conversations').update({ title: newTitle }).eq('id', id);
+
+		if (error) {
+			console.error('Error renaming conversation:', error);
+			alert('Failed to rename conversation. Please try again.');
+		} else {
+			conversation.title = newTitle;
+			conversations = [...conversations];
+		}
+	}
+
+	async function deleteConversation(id: string) {
+		if (!confirm('Are you sure you want to delete this conversation?')) {
+			return;
+		}
+
+		const { error } = await supabase.from('conversations').delete().eq('id', id);
+
+		if (error) {
+			console.error('Error deleting conversation:', error);
+			alert('Failed to delete conversation. Please try again.');
+		} else {
+			conversations = conversations.filter((conv) => conv.id !== id);
+			if (currentConversationId === id) {
+				currentConversationId = conversations[0]?.id || null;
+				currentConversation = conversations[0];
+			}
+		}
+	}
 	// Helper function to check if the current conversation has any messages
 	$: currentConversation = conversations.find((conv) => conv.id === currentConversationId);
 	$: canSendMessage = userInput.trim() !== '';
@@ -376,13 +424,23 @@
 
 				<ScrollArea class="flex-1">
 					{#each conversations as conversation}
-						<Button
-							variant={currentConversationId === conversation.id ? 'secondary' : 'ghost'}
-							class="w-full justify-start mb-1 truncate"
-							on:click={() => selectConversation(conversation.id)}
-						>
-							{conversation.title}
-						</Button>
+						<div class="flex items-center mb-1 group relative">
+							<Button
+								variant={currentConversationId === conversation.id ? 'secondary' : 'ghost'}
+								class="flex-1 justify-start truncate"
+								on:click={() => selectConversation(conversation.id)}
+							>
+								{conversation.title}
+							</Button>
+							<div
+								class="absolute right-0 mr-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in-out"
+							>
+								<DropdownMenu
+									on:rename={() => renameConversation(conversation.id)}
+									on:delete={() => deleteConversation(conversation.id)}
+								/>
+							</div>
+						</div>
 					{/each}
 				</ScrollArea>
 
@@ -526,6 +584,10 @@
 </div>
 
 <style>
+	.active .absolute {
+		opacity: 1;
+	}
+
 	.loading-dots {
 		display: flex;
 		gap: 4px;
