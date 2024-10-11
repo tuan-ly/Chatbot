@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { writable } from 'svelte/store';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
@@ -7,17 +8,14 @@
 	import { cn } from '$lib/utils';
 	import {
 		PanelLeftOpen,
-		PanelLeftClose,
 		Send,
 		Plus,
 		Settings,
 		Paperclip,
 		X,
 		Image,
-		FileText,
-		Trash2
+		FileText
 	} from 'lucide-svelte';
-	import SvelteMarkdown from 'svelte-markdown';
 	import { supabase } from '$lib/supabaseClient';
 	import { goto } from '$app/navigation';
 	import type { Conversation, Message, Profile, ContentItem } from '$lib/types';
@@ -26,8 +24,7 @@
 	import MessageContent from '$lib/components/MessageContent.svelte';
 	import DropdownMenu from '$lib/components/DropdownMenu.svelte';
 	import { MessageHandler } from '$lib/messageHandler';
-	// src/routes/dashboard/+page.ts
-	// Load conversations from Supabase
+
 	let conversations: Conversation[] = [];
 	let currentConversationId: string | null = null;
 	let currentConversation: Conversation | undefined;
@@ -37,23 +34,19 @@
 	let canSendMessage = false;
 	let userCredits = 0;
 	let userId: string | null = null;
-	let isSidebarOpen = true;
+	let isMobileSidebarOpen = false;
 
 	onMount(async () => {
 		const { data: session } = await supabase.auth.getSession();
 
 		if (!session?.session) {
-			// User is not authenticated, redirect to login page
 			goto('/login');
 			return;
 		} else {
 			userId = session.session.user.id;
-			// Load conversations from Supabase
 			await loadConversationsFromSupabase(userId);
-			// Load user's credit balance
 			await loadUserCredits(userId);
 
-			// Set up real-time listener for credits (optional)
 			supabase
 				.channel('public:profiles')
 				.on(
@@ -67,9 +60,14 @@
 		}
 	});
 
-	function toggleSidebar() {
-		isSidebarOpen = !isSidebarOpen;
+	function toggleMobileSidebar() {
+		isMobileSidebarOpen = !isMobileSidebarOpen;
 	}
+
+	function closeMobileSidebar() {
+		isMobileSidebarOpen = false;
+	}
+
 	async function loadConversationsFromSupabase(userId: string) {
 		const { data, error } = await supabase
 			.from('conversations')
@@ -139,7 +137,6 @@
 		}
 	}
 
-	// New state variables for file handling
 	let attachments: File[] = [];
 	let isDragging = false;
 	const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
@@ -153,7 +150,6 @@
 		'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 	];
 
-	// Handle file selection
 	function handleFileSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
 		if (input.files) {
@@ -161,7 +157,6 @@
 		}
 	}
 
-	// Handle drag and drop
 	function handleDragOver(event: DragEvent) {
 		event.preventDefault();
 		isDragging = true;
@@ -181,7 +176,6 @@
 		}
 	}
 
-	// Add files to attachments array
 	function addFiles(files: File[]) {
 		for (const file of files) {
 			if (file.size > MAX_FILE_SIZE) {
@@ -198,12 +192,10 @@
 		}
 	}
 
-	// Remove attachment
 	function removeAttachment(index: number) {
 		attachments = attachments.filter((_, i) => i !== index);
 	}
 
-	// Get file icon based on type
 	function getFileIcon(type: string) {
 		if (type.startsWith('image/')) {
 			return Image;
@@ -218,7 +210,6 @@
 
 		const content: ContentItem[] = [];
 
-		// Add text content if present
 		if (userInput.trim()) {
 			content.push({
 				type: 'text',
@@ -226,7 +217,6 @@
 			});
 		}
 
-		// Process attachments if present
 		if (attachments.length > 0) {
 			try {
 				const uploadedContents = await MessageHandler.processUploadedFiles(attachments);
@@ -238,7 +228,6 @@
 			}
 		}
 
-		// Save user message
 		const userMessage = await MessageHandler.saveMessage(currentConversationId, 'user', content);
 
 		if (!userMessage) {
@@ -246,19 +235,16 @@
 			return;
 		}
 
-		// Update conversation with new message
 		if (currentConversation) {
 			currentConversation.messages = [...currentConversation.messages, userMessage];
 		}
 
-		// Clear input and attachments
 		const originalInput = userInput;
 		userInput = '';
 		attachments = [];
 		isAILoading = true;
 
 		try {
-			// Get AI response
 			const response = await sendRequest(
 				currentConversation?.messages || [],
 				selectedModel,
@@ -266,7 +252,6 @@
 			);
 
 			if (response) {
-				// Save AI message
 				const aiMessage = await MessageHandler.saveMessage(currentConversationId, 'assistant', [
 					{
 						type: 'text',
@@ -296,28 +281,9 @@
 		}
 	}
 
-	// Function to render message content
-	function renderMessage(message: Message) {
-		try {
-			// Try to parse as JSON (for messages with attachments)
-			const content = JSON.parse(message.content);
-			return {
-				text: content.text,
-				attachments: content.attachments
-			};
-		} catch {
-			// If not JSON, treat as regular text message
-			return {
-				text: message.content,
-				attachments: []
-			};
-		}
-	}
-
 	async function selectConversation(id: string) {
 		currentConversationId = id;
 
-		// Load messages for the selected conversation
 		const { data: messages, error } = await supabase
 			.from('messages')
 			.select('*')
@@ -364,6 +330,7 @@
 			currentConversation = newConversation;
 		}
 	}
+
 	async function renameConversation(id: string) {
 		const conversation = conversations.find((conv) => conv.id === id);
 		if (!conversation) return;
@@ -400,76 +367,92 @@
 			}
 		}
 	}
-	// Helper function to check if the current conversation has any messages
+
+	const openDropdowns = writable<Record<string, boolean>>({});
+
+	function toggleDropdown(id: string) {
+		openDropdowns.update((state) => {
+			const newState = Object.keys(state).reduce(
+				(acc, key) => {
+					acc[key] = false;
+					return acc;
+				},
+				{} as Record<string, boolean>
+			);
+
+			newState[id] = !state[id];
+			return newState;
+		});
+	}
+
+	function closeAllDropdowns() {
+		openDropdowns.set({});
+	}
+
 	$: currentConversation = conversations.find((conv) => conv.id === currentConversationId);
 	$: canSendMessage = userInput.trim() !== '';
 </script>
 
 <div class="flex h-screen bg-background">
-	<!-- Sidebar -->
-	<div
-		class={cn(
-			'border-r bg-muted/40 transition-all duration-300',
-			isSidebarOpen ? 'w-[300px]' : 'w-0'
-		)}
-	>
-		{#if isSidebarOpen}
-			<div class="flex h-full flex-col p-4">
-				<div class="flex items-center justify-between mb-4">
-					<Button variant="outline" class="w-full" on:click={addConversation}>
-						<Plus class="mr-2 h-4 w-4" />
-						New Chat
+	<!-- Sidebar (always visible on desktop, hidden by default on mobile) -->
+	<aside class="w-64 bg-muted/40 border-r hidden md:block">
+		<div class="flex h-full flex-col p-4">
+			<div class="flex items-center justify-between mb-4">
+				<Button variant="outline" class="w-full" on:click={addConversation}>
+					<Plus class="mr-2 h-4 w-4" />
+					New Chat
+				</Button>
+			</div>
+
+			<ScrollArea class="flex-1">
+				{#each conversations as conversation}
+					<div
+						class="flex items-center mb-1 group relative"
+						class:active={currentConversationId === conversation.id}
+					>
+						<Button
+							variant={currentConversationId === conversation.id ? 'secondary' : 'ghost'}
+							class="flex-1 justify-start truncate pr-8"
+							on:click={() => selectConversation(conversation.id)}
+						>
+							{conversation.title}
+						</Button>
+						<div class="absolute right-1">
+							<DropdownMenu
+								isOpen={$openDropdowns[conversation.id] || false}
+								on:toggle={() => toggleDropdown(conversation.id)}
+								on:rename={() => renameConversation(conversation.id)}
+								on:delete={() => deleteConversation(conversation.id)}
+								on:close={closeAllDropdowns}
+							/>
+						</div>
+					</div>
+				{/each}
+			</ScrollArea>
+
+			<Separator class="my-4" />
+
+			<div class="flex flex-col gap-2">
+				<div class="flex items-center justify-between px-2">
+					<span class="text-sm text-muted-foreground">Credits: {userCredits}</span>
+					<Button variant="ghost" size="icon">
+						<Settings class="h-4 w-4" />
 					</Button>
 				</div>
-
-				<ScrollArea class="flex-1">
-					{#each conversations as conversation}
-						<div class="flex items-center mb-1 group relative">
-							<Button
-								variant={currentConversationId === conversation.id ? 'secondary' : 'ghost'}
-								class="flex-1 justify-start truncate"
-								on:click={() => selectConversation(conversation.id)}
-							>
-								{conversation.title}
-							</Button>
-							<div
-								class="absolute right-0 mr-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in-out"
-							>
-								<DropdownMenu
-									on:rename={() => renameConversation(conversation.id)}
-									on:delete={() => deleteConversation(conversation.id)}
-								/>
-							</div>
-						</div>
-					{/each}
-				</ScrollArea>
-
-				<Separator class="my-4" />
-
-				<div class="flex flex-col gap-2">
-					<div class="flex items-center justify-between px-2">
-						<span class="text-sm text-muted-foreground">Credits: {userCredits}</span>
-						<Button variant="ghost" size="icon">
-							<Settings class="h-4 w-4" />
-						</Button>
-					</div>
-				</div>
 			</div>
-		{/if}
-	</div>
+		</div>
+	</aside>
 
-	<!-- Main Content -->
-	<div class="flex-1 flex flex-col relative">
-		<!-- Toggle Sidebar Button -->
-		<Button variant="ghost" size="icon" class="absolute top-4 left-4 z-10" on:click={toggleSidebar}>
-			{#if isSidebarOpen}
-				<PanelLeftClose class="h-4 w-4" />
-			{:else}
+	<!-- Main content -->
+	<div class="flex-1 flex flex-col">
+		<!-- Mobile sidebar toggle and header -->
+		<header class="p-4 border-b md:hidden">
+			<Button variant="ghost" size="icon" on:click={toggleMobileSidebar}>
 				<PanelLeftOpen class="h-4 w-4" />
-			{/if}
-		</Button>
+			</Button>
+		</header>
 
-		<!-- Messages Area -->
+		<!-- Messages and input area -->
 		<div class="flex-1 flex flex-col relative">
 			<ScrollArea class="flex-1 p-4">
 				{#if currentConversationId}
@@ -487,11 +470,13 @@
 							>
 								<Card
 									class={cn(
-										'max-w-[80%] p-4',
+										'max-w-[90%] sm:max-w-[80%] p-3 sm:p-4 overflow-hidden',
 										message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
 									)}
 								>
-									<MessageContent {message} isLoading={isAILoading && !message.content} />
+									<div class="break-words overflow-wrap-anywhere">
+										<MessageContent {message} isLoading={isAILoading && !message.content} />
+									</div>
 								</Card>
 							</div>
 						{/each}
@@ -501,19 +486,19 @@
 
 			<!-- Input Area -->
 			<div
-				class="border-t p-4"
+				class="border-t p-2 sm:p-4"
 				on:dragover={handleDragOver}
 				on:dragleave={handleDragLeave}
 				on:drop={handleDrop}
 			>
-				<div class="container max-w-4xl mx-auto">
+				<div class="container max-w-3xl mx-auto">
 					<!-- Show attachments preview only when there are attachments -->
 					{#if attachments.length > 0}
 						<div class="mb-4 flex flex-wrap gap-2">
 							{#each attachments as file, index}
 								<div class="flex items-center gap-2 bg-muted p-2 rounded-md">
 									<svelte:component this={getFileIcon(file.type)} class="h-4 w-4" />
-									<span class="text-sm truncate max-w-[200px]">
+									<span class="text-sm truncate max-w-[150px] sm:max-w-[200px]">
 										{file.name}
 									</span>
 									<Button
@@ -529,10 +514,10 @@
 						</div>
 					{/if}
 
-					<div class="flex gap-2">
+					<div class="flex flex-col sm:flex-row gap-2">
 						<select
 							bind:value={selectedModel}
-							class="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm"
+							class="w-full sm:w-40 rounded-md border border-input bg-background px-3 py-2 text-sm mb-2 sm:mb-0"
 						>
 							{#each Object.entries(models) as [value, label]}
 								<option {value}>{label}</option>
@@ -581,9 +566,70 @@
 			</div>
 		</div>
 	</div>
+	<!-- Mobile sidebar (off-canvas) -->
+	{#if isMobileSidebarOpen}
+		<div
+			class="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 md:hidden"
+			on:click={closeMobileSidebar}
+		>
+			<aside class="w-64 h-full bg-muted/40 border-r" on:click|stopPropagation>
+				<div class="flex h-full flex-col p-4">
+					<div class="flex items-center justify-between mb-4">
+						<Button variant="outline" class="w-full" on:click={addConversation}>
+							<Plus class="mr-2 h-4 w-4" />
+							New Chat
+						</Button>
+					</div>
+
+					<ScrollArea class="flex-1">
+						{#each conversations as conversation}
+							<div
+								class="flex items-center mb-1 group relative"
+								class:active={currentConversationId === conversation.id}
+							>
+								<Button
+									variant={currentConversationId === conversation.id ? 'secondary' : 'ghost'}
+									class="flex-1 justify-start truncate pr-8"
+									on:click={() => selectConversation(conversation.id)}
+								>
+									{conversation.title}
+								</Button>
+								<div class="absolute right-1">
+									<DropdownMenu
+										isOpen={$openDropdowns[conversation.id] || false}
+										on:toggle={() => toggleDropdown(conversation.id)}
+										on:rename={() => renameConversation(conversation.id)}
+										on:delete={() => deleteConversation(conversation.id)}
+										on:close={closeAllDropdowns}
+									/>
+								</div>
+							</div>
+						{/each}
+					</ScrollArea>
+
+					<Separator class="my-4" />
+
+					<div class="flex flex-col gap-2">
+						<div class="flex items-center justify-between px-2">
+							<span class="text-sm text-muted-foreground">Credits: {userCredits}</span>
+							<Button variant="ghost" size="icon">
+								<Settings class="h-4 w-4" />
+							</Button>
+						</div>
+					</div>
+				</div>
+			</aside>
+		</div>
+	{/if}
 </div>
 
 <style>
+	:global(.overflow-wrap-anywhere) {
+		overflow-wrap: anywhere;
+	}
+	:global(.dropdown-menu) {
+		position: static;
+	}
 	.active .absolute {
 		opacity: 1;
 	}
@@ -619,6 +665,13 @@
 		}
 		40% {
 			transform: scale(1);
+		}
+	}
+
+	@media (max-width: 768px) {
+		.container {
+			padding-left: 1rem;
+			padding-right: 1rem;
 		}
 	}
 </style>
