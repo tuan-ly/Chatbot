@@ -1,11 +1,17 @@
 <script lang="ts">
 	import { FileText } from 'lucide-svelte';
-	import SvelteMarkdown from 'svelte-markdown';
+	import Markdoc from '@markdoc/markdoc';
 	import { Card } from '$lib/components/ui/card';
 	import type { Message } from '$lib/types';
 
 	export let message: Message;
 	export let isLoading: boolean = false;
+
+	function renderMarkdown(source: string) {
+		const ast = Markdoc.parse(source);
+		const content = Markdoc.transform(ast);
+		return Markdoc.renderers.html(content);
+	}
 </script>
 
 {#if isLoading && !message.content}
@@ -19,7 +25,7 @@
 		{#each message.content as item, index}
 			{#if item.type === 'text'}
 				<div class="prose dark:prose-invert max-w-none">
-					<SvelteMarkdown source={item.text} />
+					{@html renderMarkdown(item.text)}
 				</div>
 			{:else if item.type === 'image_url'}
 				<div class="mt-2">
