@@ -211,7 +211,7 @@ export class MessageHandler {
 		if (model === 'claude-3-5-sonnet-20240620') {
 			return MessageHandler.translateMessageToClaude(messages);
 		} else {
-			return MessageHandler.translateMessageToOpenAI(messages);
+			return MessageHandler.translateMessageToOpenAI_ScadeSchema(messages);
 		}
 	}
 
@@ -223,7 +223,38 @@ export class MessageHandler {
 	// 	}
 	// }
 
-	static translateMessageToOpenAI(messages: Message[]): any {
+	static translateMessageToOpenAI_ScadeSchema(messages: Message[]): any {
+		const messageArray: OpenAIMessage[] = [];
+		messages.map((message) => {
+			message.content.map((item) => {
+				switch (item.type) {
+					case 'text':
+						messageArray.push({
+							role: message.role,
+							content: (item as TextContent).text
+						});
+						break;
+					case 'image':
+						// OpenAI might not support images directly, so handle accordingly
+						messageArray.push({
+							role: message.role,
+							content: (item as ImageContent).source.data
+						});
+						break;
+					// case 'audio':
+					// 	// OpenAI might not support audio directly, so handle accordingly
+					// 	return { type: item.type, audio: (item as AudioContent).source.data };
+					default:
+						return '';
+				}
+			});
+
+			// messageArray.push(openAIMessage);
+		});
+
+		return messageArray;
+	}
+	static translateMessageToOpenAI_OpenAISchema(messages: Message[]): any {
 		const messageArray: OpenAIMessage[] = [];
 		messages.map((message) => {
 			const openAIMessage = {
@@ -239,9 +270,9 @@ export class MessageHandler {
 								type: 'image_url',
 								image_url: { url: (item as ImageContent).source.data }
 							};
-						// case 'audio':
-						// 	// OpenAI might not support audio directly, so handle accordingly
-						// 	return { type: item.type, audio: (item as AudioContent).source.data };
+						case 'audio':
+							// OpenAI might not support audio directly, so handle accordingly
+							return { type: 'audio_url', audio_url: { url: (item as AudioContent).source.data } };
 						default:
 							return '';
 					}
@@ -253,7 +284,6 @@ export class MessageHandler {
 
 		return messageArray;
 	}
-
 	// static translateFromOpenAI(response: any): Message {
 	// 	// Assume response has a 'content' field with text
 	// 	const textContent: TextContent = {
