@@ -55,14 +55,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// Proceed to get AI response
 	const aiResponse = await getAIResponse(messages, model);
-
-	if ('error' in aiResponse) {
+	// console.log('aiResponse', aiResponse);
+	if (aiResponse.ok === false) {
 		return json({ error: aiResponse.error }, { status: 500 });
 	}
 	let userCredits = profile?.credits || 0;
 
 	// Assume each AI request costs 1 credit (adjust as needed)
-	const creditCost = aiResponse.execution_cost || 1;
+	const creditCost = Math.floor(aiResponse.execution_cost * 100) || 1;
 
 	if (userCredits < creditCost) {
 		return json({ error: 'Insufficient credits' }, { status: 403 });
@@ -99,9 +99,8 @@ async function getAIResponse(
 		}
 
 		const data = await response.json();
-		return {
-			result: data.result
-		};
+		// console.log('data', data);
+		return data;
 	} catch (error) {
 		console.error('Error in getAIResponse:', error);
 		return { error: 'Failed to process AI request' };

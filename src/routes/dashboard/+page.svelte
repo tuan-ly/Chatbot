@@ -100,12 +100,21 @@
 
 	async function sendRequest(messageArray: Message[], model: string, conversationId: string) {
 		try {
+			// Check if any message has a content type that is not "text"
+			const hasNonTextContent = messageArray.some((message) =>
+				message.content.some((item) => item.type !== 'text')
+			);
+			if (model !== 'claude-3-5-sonnet-20240620' && hasNonTextContent) {
+				return 'Can not process non-text content in this model';
+			}
+
 			const {
 				data: { session }
 			} = await supabase.auth.getSession();
 			if (!session) {
 				throw new Error('User not authenticated');
 			}
+
 			const formattedMessageArray = MessageHandler.formatMesssages(messageArray, model);
 
 			console.log('formattedMessageArray', formattedMessageArray);
@@ -244,9 +253,22 @@
 		attachments = [];
 		isAILoading = true;
 
+		// Add a processing message
+		const processingMessage: Message = {
+			id: 'processing',
+			conversation_id: currentConversationId,
+			role: 'assistant',
+
+			created_at: new Date().toISOString()
+		};
+
+		if (currentConversation) {
+			currentConversation.messages = [...currentConversation.messages, processingMessage];
+		}
+
 		try {
 			const response = await sendRequest(
-				currentConversation?.messages || [],
+				currentConversation?.messages.filter((msg) => msg.id !== 'processing') || [],
 				selectedModel,
 				currentConversationId
 			);
@@ -260,7 +282,9 @@
 				]);
 
 				if (aiMessage && currentConversation) {
-					currentConversation.messages = [...currentConversation.messages, aiMessage];
+					currentConversation.messages = currentConversation.messages
+						.filter((msg) => msg.id !== 'processing')
+						.concat(aiMessage);
 				}
 			}
 		} catch (error) {
@@ -454,114 +478,120 @@
 
 		<!-- Messages and input area -->
 		<div class="flex-1 flex flex-col relative">
-			<ScrollArea class="flex-1 p-4">
-				{#if currentConversationId}
-					{#if currentConversation?.messages.length === 0}
-						<div class="flex h-full items-center justify-center">
-							<div class="text-center space-y-2">
-								<h3 class="text-lg font-semibold">Welcome to Chat</h3>
-								<p class="text-muted-foreground">Start a conversation below</p>
+			<!-- Messages area with fixed height -->
+			<div class="flex-1 overflow-y-auto">
+				<ScrollArea class="flex-1 p-4">
+					{#if currentConversationId}
+						{#if currentConversation?.messages.length === 0}
+							<div class="flex h-full items-center justify-center">
+								<div class="text-center space-y-2">
+									<h3 class="text-lg font-semibold">Welcome to Chat</h3>
+									<p class="text-muted-foreground">Start a conversation below</p>
+								</div>
 							</div>
-						</div>
-					{:else}
-						{#each currentConversation?.messages || [] as message}
-							<div
-								class={cn('mb-8 flex', message.role === 'user' ? 'justify-end' : 'justify-start')}
-							>
-								<Card
-									class={cn(
-										'max-w-[90%] sm:max-w-[80%] p-3 sm:p-4 overflow-hidden',
-										message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-									)}
+						{:else}
+							{#each currentConversation?.messages || [] as message}
+								<div
+									class={cn('mb-8 flex', message.role === 'user' ? 'justify-end' : 'justify-start')}
 								>
-									<div class="break-words overflow-wrap-anywhere">
-										<MessageContent {message} isLoading={isAILoading && !message.content} />
-									</div>
-								</Card>
-							</div>
-						{/each}
-					{/if}
-				{/if}
-			</ScrollArea>
-
-			<!-- Input Area -->
-			<div
-				class="border-t p-2 sm:p-4"
-				on:dragover={handleDragOver}
-				on:dragleave={handleDragLeave}
-				on:drop={handleDrop}
-			>
-				<div class="container max-w-3xl mx-auto">
-					<!-- Show attachments preview only when there are attachments -->
-					{#if attachments.length > 0}
-						<div class="mb-4 flex flex-wrap gap-2">
-							{#each attachments as file, index}
-								<div class="flex items-center gap-2 bg-muted p-2 rounded-md">
-									<svelte:component this={getFileIcon(file.type)} class="h-4 w-4" />
-									<span class="text-sm truncate max-w-[150px] sm:max-w-[200px]">
-										{file.name}
-									</span>
-									<Button
-										variant="ghost"
-										size="icon"
-										class="h-4 w-4 p-0"
-										on:click={() => removeAttachment(index)}
+									<Card
+										class={cn(
+											'max-w-[90%] sm:max-w-[80%] p-3 sm:p-4 overflow-hidden',
+											message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+										)}
 									>
-										<X class="h-3 w-3" />
+										<div class="break-words overflow-wrap-anywhere">
+											<MessageContent {message} isLoading={isAILoading && !message.content} />
+										</div>
+									</Card>
+								</div>
+							{/each}
+						{/if}
+					{/if}
+				</ScrollArea>
+			</div>
+			<!-- Input Area -->
+			<div class="border-t p-2 sm:p-4">
+				<div class="container w-full mx-auto">
+					<div
+						class=" p-2 sm:p-4"
+						on:dragover={handleDragOver}
+						on:dragleave={handleDragLeave}
+						on:drop={handleDrop}
+					>
+						<div class="container w-full mx-auto">
+							<!-- Show attachments preview only when there are attachments -->
+							{#if attachments.length > 0}
+								<div class="mb-4 flex flex-wrap gap-2">
+									{#each attachments as file, index}
+										<div class="flex items-center gap-2 bg-muted p-2 rounded-md">
+											<svelte:component this={getFileIcon(file.type)} class="h-4 w-4" />
+											<span class="text-sm truncate max-w-[150px] sm:max-w-[200px]">
+												{file.name}
+											</span>
+											<Button
+												variant="ghost"
+												size="icon"
+												class="h-4 w-4 p-0"
+												on:click={() => removeAttachment(index)}
+											>
+												<X class="h-3 w-3" />
+											</Button>
+										</div>
+									{/each}
+								</div>
+							{/if}
+
+							<div class="flex flex-col sm:flex-row gap-2">
+								<select
+									bind:value={selectedModel}
+									class="w-full sm:w-40 rounded-md border border-input bg-background px-3 py-2 text-sm mb-2 sm:mb-0"
+								>
+									{#each Object.entries(models) as [value, label]}
+										<option {value}>{label}</option>
+									{/each}
+								</select>
+
+								<div class="flex-1 flex gap-2">
+									<div class="flex-1 relative">
+										<Textarea
+											bind:value={userInput}
+											placeholder="Type your message..."
+											class="min-h-[50px] pr-10"
+											rows="1"
+										/>
+										<div class="absolute right-2 bottom-2">
+											<label class="cursor-pointer">
+												<input
+													type="file"
+													multiple
+													class="hidden"
+													accept={ALLOWED_TYPES.join(',')}
+													on:change={handleFileSelect}
+												/>
+												<Paperclip class="h-4 w-4 text-muted-foreground hover:text-foreground" />
+											</label>
+										</div>
+									</div>
+									<Button
+										class="self-end"
+										on:click={sendMessage}
+										disabled={(!userInput.trim() && attachments.length === 0) || isAILoading}
+									>
+										<Send class="h-4 w-4" />
 									</Button>
 								</div>
-							{/each}
-						</div>
-					{/if}
-
-					<div class="flex flex-col sm:flex-row gap-2">
-						<select
-							bind:value={selectedModel}
-							class="w-full sm:w-40 rounded-md border border-input bg-background px-3 py-2 text-sm mb-2 sm:mb-0"
-						>
-							{#each Object.entries(models) as [value, label]}
-								<option {value}>{label}</option>
-							{/each}
-						</select>
-
-						<div class="flex-1 flex gap-2">
-							<div class="flex-1 relative">
-								<Textarea
-									bind:value={userInput}
-									placeholder="Type your message..."
-									class="min-h-[50px] pr-10"
-									rows="1"
-								/>
-								<div class="absolute right-2 bottom-2">
-									<label class="cursor-pointer">
-										<input
-											type="file"
-											multiple
-											class="hidden"
-											accept={ALLOWED_TYPES.join(',')}
-											on:change={handleFileSelect}
-										/>
-										<Paperclip class="h-4 w-4 text-muted-foreground hover:text-foreground" />
-									</label>
-								</div>
 							</div>
-							<Button
-								class="self-end"
-								on:click={sendMessage}
-								disabled={(!userInput.trim() && attachments.length === 0) || isAILoading}
-							>
-								<Send class="h-4 w-4" />
-							</Button>
+
+							{#if isDragging}
+								<div
+									class="absolute inset-0 bg-background/80 flex items-center justify-center border-2 border-dashed border-primary rounded-lg"
+								>
+									<p class="text-lg font-medium">Drop files here</p>
+								</div>
+							{/if}
 						</div>
 					</div>
-
-					{#if isDragging}
-						<div
-							class="absolute inset-0 bg-background/80 flex items-center justify-center border-2 border-dashed border-primary rounded-lg"
-						>
-							<p class="text-lg font-medium">Drop files here</p>
-						</div>
-					{/if}
 				</div>
 			</div>
 		</div>
@@ -655,6 +685,19 @@
 
 	.dot:nth-child(2) {
 		animation-delay: -0.16s;
+	}
+
+	.flex-1.flex.flex-col {
+		height: calc(100vh - 57px); /* Adjust 57px if your header height differs */
+	}
+
+	.flex-1.overflow-y-auto {
+		height: 0; /* This allows the flex-grow to work properly */
+	}
+
+	/* Ensure the input area stays at the bottom */
+	.border-t {
+		flex-shrink: 0;
 	}
 
 	@keyframes bounce {

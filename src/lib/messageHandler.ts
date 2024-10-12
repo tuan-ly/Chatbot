@@ -211,7 +211,7 @@ export class MessageHandler {
 		if (model === 'claude-3-5-sonnet-20240620') {
 			return MessageHandler.translateMessageToClaude(messages);
 		} else {
-			return MessageHandler.translateMessageToOpenAI(messages);
+			return MessageHandler.translateMessageToOpenAI_ScadeSchema(messages);
 		}
 	}
 
@@ -223,7 +223,7 @@ export class MessageHandler {
 	// 	}
 	// }
 
-	static translateMessageToOpenAI(messages: Message[]): any {
+	static translateMessageToOpenAI_ScadeSchema(messages: Message[]): any {
 		const messageArray: OpenAIMessage[] = [];
 		messages.map((message) => {
 			message.content.map((item) => {
@@ -254,7 +254,7 @@ export class MessageHandler {
 
 		return messageArray;
 	}
-	static translateMessageToOpenAI_newSchema(messages: Message[]): any {
+	static translateMessageToOpenAI_OpenAISchema(messages: Message[]): any {
 		const messageArray: OpenAIMessage[] = [];
 		messages.map((message) => {
 			const openAIMessage = {
@@ -270,9 +270,9 @@ export class MessageHandler {
 								type: 'image_url',
 								image_url: { url: (item as ImageContent).source.data }
 							};
-						// case 'audio':
-						// 	// OpenAI might not support audio directly, so handle accordingly
-						// 	return { type: item.type, audio: (item as AudioContent).source.data };
+						case 'audio':
+							// OpenAI might not support audio directly, so handle accordingly
+							return { type: 'audio_url', audio_url: { url: (item as AudioContent).source.data } };
 						default:
 							return '';
 					}
