@@ -226,6 +226,37 @@ export class MessageHandler {
 	static translateMessageToOpenAI(messages: Message[]): any {
 		const messageArray: OpenAIMessage[] = [];
 		messages.map((message) => {
+			message.content.map((item) => {
+				switch (item.type) {
+					case 'text':
+						messageArray.push({
+							role: message.role,
+							content: (item as TextContent).text
+						});
+						break;
+					case 'image':
+						// OpenAI might not support images directly, so handle accordingly
+						messageArray.push({
+							role: message.role,
+							content: (item as ImageContent).source.data
+						});
+						break;
+					// case 'audio':
+					// 	// OpenAI might not support audio directly, so handle accordingly
+					// 	return { type: item.type, audio: (item as AudioContent).source.data };
+					default:
+						return '';
+				}
+			});
+
+			// messageArray.push(openAIMessage);
+		});
+
+		return messageArray;
+	}
+	static translateMessageToOpenAI_newSchema(messages: Message[]): any {
+		const messageArray: OpenAIMessage[] = [];
+		messages.map((message) => {
 			const openAIMessage = {
 				role: message.role,
 				content: message.content.map((item) => {
@@ -253,7 +284,6 @@ export class MessageHandler {
 
 		return messageArray;
 	}
-
 	// static translateFromOpenAI(response: any): Message {
 	// 	// Assume response has a 'content' field with text
 	// 	const textContent: TextContent = {
